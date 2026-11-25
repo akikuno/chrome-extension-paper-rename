@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ja" xml:lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>proposed_plan</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <style>
+  body { font-family: Arial, "BIZ UDPGothic", sans-serif; font-size: 16pt; line-height: 1.5; max-width: 900px; margin: 1.5em auto; }
+  code { font-family: inherit; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+<h1
+id="論文pdfのファイル名を設定する">論文PDFのファイル名を設定する</h1>
+<h2 id="目的と使い方">1. 目的と使い方</h2>
+<p>拡張機能の設定画面で、出版年、筆頭著者の姓、論文タイトル、掲載誌名、DOI、PMIDを組み合わせてファイル名を指定する。選んだ項目の順番と区切りを編集し、プレビューで確認して保存する。項目内の空白は「_」「空白のまま」「-」から選べる。拡張子は自動で付く。</p>
+<p>たとえば <code>PMID-{pmid}-{author}</code> は
+<code>PMID-34753928-Buphamalai.pdf</code> になる。初期書式は
+<code>{year}-{author}-{title}</code>
+で、空白は「_」に変換する。項目を取得できない場合は従来の書式を使い、それに必要な情報も不足する場合はダウンロード元の名前を使う。</p>
+<h2 id="実装と確認">2. 実装と確認</h2>
+<p>設定画面とダウンロード処理で検証とファイル名生成を共用し、設定はChromeのローカルストレージに保持する。既存の判定を通過した本文PDFに書式を適用する。掲載誌名とPMIDは既存の書誌情報源から取得する。PMIDを指定して不足する場合のみ、既知のDOIをEurope
+PMCで完全一致照会する。照会が失敗またはタイムアウトした場合は従来の名前を使う。</p>
+<p>未知の項目名や禁止文字を検出し、名前が230バイトを超える場合はタイトル、掲載誌名、著者姓の順に短縮する。既定のファイル名の完全一致、並べ替え、省略、空白、Unicode、PMIDの欠損・不一致・タイムアウト、一般PDFと補足資料の扱いを自動テストする。Chrome実機ではプレビュー、次回ダウンロードへの反映、再起動後の設定保持、初期値への復帰を確認する。</p>
+</body>
+</html>

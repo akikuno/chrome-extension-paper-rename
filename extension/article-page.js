@@ -7,7 +7,9 @@
   const author = values("citation_author")[0];
   const year = (values("citation_publication_date")[0] ?? values("citation_date")[0])?.match(/^([12]\d{3})\b/)?.[1];
   const doi = values("citation_doi")[0];
-  if (links.length !== 1 || !title || !author || !year || (!doi && !values("citation_journal_title").length)) return;
+  const journal = values("citation_journal_title")[0];
+  const pmid = values("citation_pmid")[0];
+  if (links.length !== 1 || !title || !author || !year || (!doi && !journal)) return;
 
   // A comma in a citation author field separates the family name from given names.
   let family = author.includes(",") ? author.split(",")[0].trim() : null;
@@ -29,7 +31,7 @@
 
   try {
     const pdfUrl = new URL(links[0], document.baseURI).href;
-    chrome.runtime.sendMessage({kind: "article", pdfUrl, title, family, year, doi}).catch(() => {});
+    chrome.runtime.sendMessage({kind: "article", pdfUrl, title, family, year, doi, journal, pmid}).catch(() => {});
   } catch {
     // Ignore invalid PDF links.
   }

@@ -5,12 +5,36 @@
 <title>論文PDFの設定</title>
 <style>
 body { width: 320px; margin: 16px; font: 16pt Arial, "BIZ UDPGothic", sans-serif; }
-button { font: inherit; }
+button, input, select { font: inherit; }
+h1 { font-size: 18pt; margin-top: 0; }
+label { display: block; margin-top: 12px; }
+input { width: 100%; box-sizing: border-box; }
+#fields, .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+#preview { display: block; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
 <button id="enable" type="button">サイトへのアクセスを許可</button>
 <p id="status" role="status"></p>
-<script src="setup.js"></script>
+<hr>
+<h1>PDFのファイル名</h1>
+<form id="naming">
+<label for="template">命名書式</label>
+<input id="template" type="text" maxlength="512" spellcheck="false" required>
+<div id="fields" aria-label="挿入する項目"></div>
+<label for="space">項目内の空白</label>
+<select id="space">
+<option value="_">_ に置換</option>
+<option value=" ">空白のまま</option>
+<option value="-">- に置換</option>
+</select>
+<p><strong>プレビュー</strong><output id="preview" for="template space"></output></p>
+<div class="actions">
+<button id="save" type="submit">保存</button>
+<button id="reset" type="button">初期値に戻す</button>
+</div>
+<p id="naming-status" role="status"></p>
+</form>
+<script type="module" src="setup.js"></script>
 </body>
 </html>

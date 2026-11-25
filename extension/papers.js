@@ -93,6 +93,69 @@ export function paperFilename(record) {
   return shortened ? `${prefix}${shortened}.pdf` : null;
 }
 
+export const defaultNaming = {template: "{year}-{author}-{title}", space: "_"};
+
+const fields = /\{(year|author|title|journal|doi|pmid)\}/g;
+const unsafe = /[<>:"/\\|?*\p{Cc}\p{Cf}]/u;
+const reserved = /^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|$)/i;
+
+export function namingSettings(template, space) {
+  if (typeof template !== "string" || !["_", " ", "-"].includes(space)) return null;
+  const stem = template.trim().replace(/\.pdf$/i, "").trim();
+  const literals = stem.replace(fields, "");
+  if (stem.length > 512 || stem === literals || unsafe.test(literals) || /[{}]/.test(literals)) return null;
+  return {template: stem, space};
+}
+
+export function normalizePmid(value) {
+  return /^[1-9]\d*$/.test(value ?? "") ? String(value) : null;
+}
+
+export function customFilename(record, {template, space}) {
+  if (template === defaultNaming.template && space === defaultNaming.space) return paperFilename(record);
+  const part = value => cleanText(value).normalize("NFC")
+    .replace(new RegExp(unsafe, "gu"), "_").trim().replace(/^[._]+|[._]+$/g, "")
+    .replace(/\s+/gu, space);
+  const values = {
+    year: /^[12]\d{3}$/.test(record.year) ? String(record.year) : "",
+    author: part(record.family),
+    title: part(record.title),
+    journal: part(record.journal),
+    doi: normalizeDoi(record.doi)?.replace(new RegExp(unsafe, "gu"), "_"),
+    pmid: normalizePmid(record.pmid),
+  };
+  const used = new Set([...template.matchAll(fields)].map(match => match[1]));
+  if ([...used].some(field => !values[field])) return null;
+  const render = () => template.replace(fields, (_, field) => values[field]).replace(/[. ]+$/u, "");
+  const encoder = new TextEncoder();
+  let stem = render();
+  for (const field of ["title", "journal", "author"]) {
+    if (!used.has(field)) continue;
+    const characters = [...values[field]];
+    while (encoder.encode(stem).length > 226 && characters.length > 1) {
+      characters.pop();
+      values[field] = characters.join("").replace(/[. _-]+$/u, "") || characters[0];
+      stem = render();
+    }
+  }
+  return stem && !reserved.test(stem) && encoder.encode(stem).length <= 226 ? `${stem}.pdf` : null;
+}
+
+async function searchEuropePmc(query, resultType, signal, fetcher) {
+  const params = new URLSearchParams({query, format: "json", resultType});
+  const response = await fetcher(`https://www.ebi.ac.uk/europepmc/webservices/rest/search?${params}`, {signal, credentials: "omit"});
+  return response.ok ? response.json() : null;
+}
+
+export async function lookupPmid(doi, signal, fetcher = fetch) {
+  const data = await searchEuropePmc(`DOI:"${doi}" AND SRC:MED`, "lite", signal, fetcher);
+  const results = data?.resultList?.result ?? [];
+  if (data?.hitCount !== results.length) return null;
+  const ids = new Set(results.filter(row => row.source === "MED" && normalizeDoi(row.doi) === doi)
+    .map(row => normalizePmid(row.pmid ?? row.id)).filter(Boolean));
+  return ids.size === 1 ? [...ids][0] : null;
+}
+
 export async function lookup(identifier, signal, fetcher = fetch) {
   const {type, id} = identifier;
   if (type === "doi") {
@@ -105,14 +168,12 @@ export async function lookup(identifier, signal, fetcher = fetch) {
     if (!article) return null;
     const dates = [message["published-online"], message.published, message["published-print"]];
     const year = dates.map(date => date?.["date-parts"]?.[0]?.[0]).find(value => /^[12]\d{3}$/.test(value));
-    return {year, family: message.author?.[0]?.family, title: message.title?.[0], doi: id};
+    return {year, family: message.author?.[0]?.family, title: message.title?.[0], doi: id,
+      journal: message.type === "journal-article" ? message["container-title"]?.[0] : null};
   }
 
-  const query = new URLSearchParams({query: `PMCID:${id}`, format: "json", resultType: "core"});
-  const response = await fetcher(`https://www.ebi.ac.uk/europepmc/webservices/rest/search?${query}`, {signal, credentials: "omit"});
-  if (!response.ok) return null;
-  const data = await response.json();
-  const results = data.resultList?.result?.filter(record => record.pmcid === id);
+  const data = await searchEuropePmc(`PMCID:${id}`, "core", signal, fetcher);
+  const results = data?.resultList?.result?.filter(record => record.pmcid === id);
   if (results?.length !== 1) return null;
   const [record] = results;
   return {
@@ -120,5 +181,7 @@ export async function lookup(identifier, signal, fetcher = fetch) {
     family: record.authorList?.author?.[0]?.lastName,
     title: record.title,
     doi: normalizeDoi(record.doi),
+    journal: record.journalInfo?.journal?.title,
+    pmid: normalizePmid(record.pmid ?? (record.source === "MED" ? record.id : null)),
   };
 }

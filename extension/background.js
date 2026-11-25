@@ -1,4 +1,4 @@
-import {identify, isSupplement, lookup, normalizeDoi, paperFilename, urlKey} from "./papers.js";
+import {customFilename, defaultNaming, identify, isSupplement, lookup, lookupPmid, namingSettings, normalizeDoi, normalizePmid, paperFilename, urlKey} from "./papers.js";
 
 const sitePermission = {origins: ["https://*/*"]};
 const script = {
@@ -42,6 +42,8 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (typeof title !== "string" || title.length > 4096 || pdfUrl.length > 8192 ||
       !/^[12]\d{3}$/.test(year) || (family != null && (typeof family !== "string" || family.length > 256))) return;
   const doi = normalizeDoi(message.doi);
+  const pmid = normalizePmid(typeof message.pmid === "string" && message.pmid.length <= 32 ? message.pmid : null);
+  const journal = typeof message.journal === "string" && message.journal.length <= 4096 ? message.journal : null;
   pendingWrite = pendingWrite.catch(() => {}).then(async () => {
     if (!await chrome.permissions.contains(sitePermission)) return;
     const {articles = []} = await chrome.storage.session.get("articles");
@@ -49,7 +51,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     const retained = articles.filter(article => now - article.time < recordLifetime
       && !(article.page === page && article.pdfUrl === pdfUrl));
     await chrome.storage.session.set({
-      articles: [...retained.slice(-255), {page, pdfUrl, title, year, family, doi, time: now}],
+      articles: [...retained.slice(-255), {page, pdfUrl, title, year, family, doi, journal, pmid, time: now}],
     });
   });
   pendingWrite.then(() => reply(true), () => reply(false));
@@ -74,13 +76,14 @@ async function determine(item, signal) {
     const record = await lookup({type: "pmcid", id: pmcid}, signal);
     if (!record || (doi && record.doi && doi !== record.doi)) return null;
     const name = paperFilename(record);
-    return names.size && !names.has(name) ? null : name;
+    return name && (!names.size || names.has(name)) ? record : null;
   }
   if (ids.length || (doi && !names.size)) {
-    const name = paperFilename(await lookup({type: "doi", id: doi}, signal));
-    return names.size && !names.has(name) ? null : name;
+    const record = await lookup({type: "doi", id: doi}, signal);
+    const name = paperFilename(record);
+    return name && (!names.size || names.has(name)) ? record : null;
   }
-  return [...names][0];
+  return records.filter(record => paperFilename(record)).at(-1);
 }
 
 chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
@@ -95,8 +98,24 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3000);
-  const deadline = new Promise(resolve => controller.signal.addEventListener("abort", () => resolve(null), {once: true}));
-  Promise.race([determine(item, controller.signal), deadline]).catch(() => null).then(filename => {
+  let fallback = null;
+  const deadline = new Promise(resolve => controller.signal.addEventListener("abort", () => resolve(fallback), {once: true}));
+  const filenameForDownload = async () => {
+    const [record, stored] = await Promise.all([
+      determine(item, controller.signal),
+      chrome.storage.local.get("naming").catch(() => ({})),
+    ]);
+    if (!record) return null;
+    fallback = paperFilename(record);
+    const naming = namingSettings(stored.naming?.template, stored.naming?.space) ?? defaultNaming;
+    const doi = normalizeDoi(record.doi);
+    if (naming.template.includes("{pmid}") && !record.pmid && doi) {
+      const pmid = await lookupPmid(doi, controller.signal).catch(() => null);
+      return customFilename({...record, pmid}, naming) ?? fallback;
+    }
+    return customFilename(record, naming) ?? fallback;
+  };
+  Promise.race([filenameForDownload(), deadline]).catch(() => fallback).then(filename => {
     clearTimeout(timeout);
     if (filename) suggest({filename, conflictAction: "uniquify"});
     else suggest();
