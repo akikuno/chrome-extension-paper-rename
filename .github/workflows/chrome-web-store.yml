@@ -1,0 +1,56 @@
+name: Submit Chrome extension update
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'extension/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: chrome-web-store
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test downloads
+        run: node tests/downloads.test.mjs
+      - name: Package extension
+        run: |
+          git archive --format=zip --output="$RUNNER_TEMP/extension.zip" HEAD:extension
+          python -m zipfile -t "$RUNNER_TEMP/extension.zip"
+      - name: Install HTTP client
+        run: |
+          python -m venv "$RUNNER_TEMP/chrome-web-store"
+          "$RUNNER_TEMP/chrome-web-store/bin/pip" install 'requests>=2,<3'
+      - name: Authenticate to Google without a key
+        id: google-auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.CWS_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.CWS_SERVICE_ACCOUNT_EMAIL }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Submit update for review
+        env:
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: dkahfoefnfigjjgoadhfkfiglkncpjoi
+          CWS_ACCESS_TOKEN: ${{ steps.google-auth.outputs.access_token }}
+        run: |
+          "$RUNNER_TEMP/chrome-web-store/bin/python" .github/publish_chrome.py "$RUNNER_TEMP/extension.zip"

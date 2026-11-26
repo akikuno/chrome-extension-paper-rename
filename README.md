@@ -37,3 +37,44 @@ Chromeのダウンロード時に、論文PDFを「出版年-筆頭著者の姓-
 ```text
 2021-Buphamalai-Network_analysis_reveals_rare_disease_signatures_across_multiple_levels_of_biological_organization.pdf
 ```
+
+## Chromeウェブストアの更新
+
+初版を開発者ダッシュボードから限定公開した後は、`extension/manifest.json`の`version`を上げて`main`に反映すると、GitHub Actionsが`extension/`を検証・梱包し、更新を審査に提出します。公開済みと同じ版を再提出することはありません。審査通過後は既存の公開範囲で自動配信されます。
+
+### 初回の認証設定
+
+GitHub ActionsはWorkload Identity Federationを使い、サービスアカウントの短期アクセストークンを取得します。JSON鍵の発行は不要です。
+
+1. [Chromeウェブストアの公式手順](https://developer.chrome.com/docs/webstore/service-accounts)に沿って、Google CloudでChromeウェブストアAPIを有効にし、作成済みのサービスアカウントのメールアドレスを開発者ダッシュボードのAccount欄に登録します。
+2. [Google Cloudの公式手順](https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines)に沿って、IAM・Security Token Service・Service Account Credentials APIを有効にし、Workload Identity Poolを作成します。そのプールにOpenID Connectプロバイダを追加します。発行元URLは `https://token.actions.githubusercontent.com`、許可するオーディエンスはデフォルトです。
+3. プロバイダの属性マッピングを `google.subject=assertion.sub` と `attribute.repository_id=assertion.repository_id` に設定します。属性条件には次を入力します。
+
+   ```text
+   assertion.repository_owner_id == '15861316' && assertion.repository_id == '1471035184' && assertion.ref == 'refs/heads/main'
+   ```
+
+4. サービスアカウントの権限で、次のプリンシパルに「Workload Identity User（`roles/iam.workloadIdentityUser`）」を付与します。番号はプールを作ったGoogle Cloudプロジェクトの**プロジェクト番号**を使います。
+
+   ```text
+   principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/attribute.repository_id/1471035184
+   ```
+
+GitHubの「Settings → Secrets and variables → Actions → Variables」に次のリポジトリ変数を登録します。
+
+| 名前 | 値 |
+|---|---|
+| `CWS_PUBLISHER_ID` | 開発者ダッシュボードの公開者ID |
+| `CWS_SERVICE_ACCOUNT_EMAIL` | 作成済みのサービスアカウントのメールアドレス |
+| `CWS_WORKLOAD_IDENTITY_PROVIDER` | プロバイダの完全名。形式は `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID` |
+
+限定公開した拡張機能のID `dkahfoefnfigjjgoadhfkfiglkncpjoi` はワークフローに設定済みです。
+
+初版の公開前や別の版が審査中の場合は、先行する公開が終わってから、Actionsの「Submit Chrome extension update」で`main`を指定して手動実行できます。
+
+
+gcloud iam workload-identity-pools providers list \
+  --project=project-881094bd-bb6c-4f4b-ba3 \
+  --location=global \
+  --workload-identity-pool='github-actions' \
+  --format='table(displayName,name,state)'

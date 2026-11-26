@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "論文PDFの自動ファイル名変更",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "論文PDFを出版年、筆頭著者の姓、タイトルで保存します。",
   "minimum_chrome_version": "102",
   "permissions": ["downloads", "storage", "scripting"],
   "host_permissions": ["https://api.crossref.org/*", "https://www.ebi.ac.uk/*"],
   "optional_host_permissions": ["https://*/*"],
   "background": {"service_worker": "background.js", "type": "module"},
+  "icons": {"128": "icons/icon128.png"},
   "action": {"default_popup": "setup.html"}
 }
