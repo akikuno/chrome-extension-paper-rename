@@ -11,6 +11,10 @@ const expected = "2021-Buphamalai-Network_analysis_reveals_rare_disease_signatur
 const nature = "https://www.nature.com/articles/s41467-021-26674-1.pdf";
 const pmc = "https://pmc.ncbi.nlm.nih.gov/articles/PMC8578255/pdf/41467_2021_Article_26674.pdf";
 const repository = "https://repository.example/download/42";
+const springerDoi = "10.1038/s44318-026-00977-9";
+const springerTitle = "NFYA regulates spermatogenesis through multifaceted chromatin interactions";
+const oupDoi = "10.1093/molbev/msaf023";
+const oupTitle = "Combinatorial In Vivo Genome Editing Identifies Widespread Epistasis and an Accessible Fitness Landscape During Lung Tumorigenesis";
 
 const handlers = {};
 let session = {};
@@ -33,6 +37,14 @@ globalThis.fetch = async (value, options) => {
   requests.push(new URL(value));
   assert.equal(options.credentials, "omit");
   if (offline) throw new Error("Network unavailable");
+  if (decodeURIComponent(requests.at(-1).pathname) === `/works/${oupDoi}`) {
+    return {ok: true, json: async () => ({message: {DOI: oupDoi, type: "journal-article",
+      "published-online": {"date-parts": [[2025]]}, title: [oupTitle], author: [{family: "Hebert"}]}})};
+  }
+  if (decodeURIComponent(requests.at(-1).pathname) === `/works/${springerDoi}`) {
+    return {ok: true, json: async () => ({message: {DOI: springerDoi, type: "journal-article",
+      "published-online": {"date-parts": [[2026]]}, title: [springerTitle], author: [{family: "Wang"}]}})};
+  }
   if (requests.at(-1).searchParams.get("query")?.includes("SRC:MED")) {
     if (slowPmid) {
       return new Promise((_, reject) => {
@@ -63,6 +75,31 @@ test("Nature and PMC produce the same filename, including a redirected download"
     });
   }
   assert.equal(requests[1].searchParams.get("query"), `PMCID:${pmcid}`);
+});
+
+test("Springer article PDF uses the DOI without the file extension", async () => {
+  const url = `https://link.springer.com/content/pdf/${springerDoi}.pdf`;
+  assert.deepEqual(await suggest(url), {
+    filename: "2026-Wang-NFYA_regulates_spermatogenesis_through_multifaceted_chromatin_interactions.pdf",
+    conflictAction: "uniquify",
+  });
+  assert.equal(decodeURIComponent(requests.at(-1).pathname), `/works/${springerDoi}`);
+});
+
+test("Oxford Academic issue and advance PDFs resolve the same DOI across a CDN redirect", async () => {
+  const publisher = "https://academic.oup.com/mbe";
+  const finalUrl = "https://watermark02.silverchair.com/msaf023.pdf?token=test";
+  for (const path of [
+    "article-pdf/42/2/msaf023/61766815/msaf023.pdf",
+    `advance-article-pdf/doi/${oupDoi}/61766815/msaf023.pdf`,
+  ]) {
+    assert.deepEqual(await suggest(`${publisher}/${path}`, {finalUrl}), {
+      filename: `2025-Hebert-${oupTitle.replaceAll(" ", "_")}.pdf`, conflictAction: "uniquify",
+    });
+    assert.equal(decodeURIComponent(requests.at(-1).pathname), `/works/${oupDoi}`);
+  }
+  assert.equal(await suggest(`${publisher}/article-pdf/42/2/msaf023/61766815/other.pdf`), undefined);
+  assert.equal(await suggest(finalUrl), undefined);
 });
 
 test("Generic citation tags tie metadata to the exact PDF URL", async () => {

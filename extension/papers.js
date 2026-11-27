@@ -51,6 +51,15 @@ export function identify(value) {
   if (["www.nature.com", "nature.com"].includes(url.hostname) && nature) {
     return {type: "doi", id: normalizeDoi(`10.1038/${nature[1]}`)};
   }
+  if (["link.springer.com", "link.springernature.com"].includes(url.hostname)) {
+    path = path.replace(/^(\/content\/pdf\/10\.\d{4,9}\/.+)\.pdf$/i, "$1");
+  }
+  if (url.hostname === "academic.oup.com") {
+    const issuePdf = /^\/mbe\/article-pdf\/\d+\/\d+\/([a-z]{4}\d{3})\/\d+\/\1\.pdf$/i.exec(path);
+    const advancePdf = /^\/[a-z0-9-]+\/advance-article-pdf\/doi\/(10\.1093\/[a-z0-9-]+\/([a-z0-9-]+))\/\d+\/\2\.pdf$/i.exec(path);
+    const doi = normalizeDoi(issuePdf ? `10.1093/molbev/${issuePdf[1]}` : advancePdf?.[1]);
+    if (doi) return {type: "doi", id: doi};
+  }
   const doiPath = /(?:^|\/)(?:pdf|epdf|pdfdirect)\/(10\.\d{4,9}\/.+)$/i.exec(path);
   const doi = normalizeDoi(doiPath?.[1] ??
     (/\/(?:pdf|file)\/?$/i.test(path) ? url.searchParams.get("id") ?? url.searchParams.get("doi") : null));
