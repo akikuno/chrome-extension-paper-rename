@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "論文PDFの自動ファイル名変更",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "論文PDFを出版年、筆頭著者の姓、タイトルで保存します。",
   "minimum_chrome_version": "102",
   "permissions": ["downloads", "storage", "scripting"],

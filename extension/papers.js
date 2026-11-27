@@ -52,13 +52,27 @@ export function identify(value) {
     return {type: "doi", id: normalizeDoi(`10.1038/${nature[1]}`)};
   }
   if (["link.springer.com", "link.springernature.com"].includes(url.hostname)) {
-    path = path.replace(/^(\/content\/pdf\/10\.\d{4,9}\/.+)\.pdf$/i, "$1");
+    path = path.replace(/^(\/content\/pdf\/10\.\d{4,9}\/.+?)(?:_reference)?\.pdf$/i, "$1");
   }
   if (url.hostname === "academic.oup.com") {
     const issuePdf = /^\/mbe\/article-pdf\/\d+\/\d+\/([a-z]{4}\d{3})\/\d+\/\1\.pdf$/i.exec(path);
     const advancePdf = /^\/[a-z0-9-]+\/advance-article-pdf\/doi\/(10\.1093\/[a-z0-9-]+\/([a-z0-9-]+))\/\d+\/\2\.pdf$/i.exec(path);
     const doi = normalizeDoi(issuePdf ? `10.1093/molbev/${issuePdf[1]}` : advancePdf?.[1]);
     if (doi) return {type: "doi", id: doi};
+  }
+  const silverchair = /^watermark\d+\.silverchair\.com$/.test(url.hostname);
+  if (silverchair) {
+    const nar = /^\/(gk[a-z]{2}\d+)\.pdf$/i.exec(path);
+    if (nar) return {type: "doi", id: normalizeDoi(`10.1093/nar/${nar[1]}`)};
+  }
+  const bioinformatics = silverchair
+    ? /^\/bioinformatics_(\d+)_(\d+)_([a-z]?\d+)\.pdf$/i.exec(path)
+    : url.hostname === "academic.oup.com"
+      ? /^\/bioinformatics\/article-pdf\/(\d+)\/(\d+)\/([a-z]?\d+)\/\d+\/bioinformatics_\1_\2_\3\.pdf$/i.exec(path)
+      : null;
+  if (bioinformatics) {
+    const [, volume, issue, page] = bioinformatics;
+    return {type: "bioinformatics", volume, issue, page: page.toLowerCase()};
   }
   const doiPath = /(?:^|\/)(?:pdf|epdf|pdfdirect)\/(10\.\d{4,9}\/.+)$/i.exec(path);
   const doi = normalizeDoi(doiPath?.[1] ??
@@ -165,6 +179,13 @@ export async function lookupPmid(doi, signal, fetcher = fetch) {
   return ids.size === 1 ? [...ids][0] : null;
 }
 
+function crossrefRecord(message) {
+  const dates = [message["published-online"], message.published, message["published-print"]];
+  const year = dates.map(date => date?.["date-parts"]?.[0]?.[0]).find(value => /^[12]\d{3}$/.test(value));
+  return {year, family: message.author?.[0]?.family, title: message.title?.[0], doi: normalizeDoi(message.DOI),
+    journal: message.type === "journal-article" ? message["container-title"]?.[0] : null};
+}
+
 export async function lookup(identifier, signal, fetcher = fetch) {
   const {type, id} = identifier;
   if (type === "doi") {
@@ -175,10 +196,23 @@ export async function lookup(identifier, signal, fetcher = fetch) {
     const article = ["journal-article", "proceedings-article"].includes(message.type)
       || (message.type === "posted-content" && message.subtype === "preprint");
     if (!article) return null;
-    const dates = [message["published-online"], message.published, message["published-print"]];
-    const year = dates.map(date => date?.["date-parts"]?.[0]?.[0]).find(value => /^[12]\d{3}$/.test(value));
-    return {year, family: message.author?.[0]?.family, title: message.title?.[0], doi: id,
-      journal: message.type === "journal-article" ? message["container-title"]?.[0] : null};
+    return crossrefRecord(message);
+  }
+  if (type === "bioinformatics") {
+    const {volume, issue, page} = identifier;
+    const params = new URLSearchParams({
+      "query.bibliographic": `Bioinformatics ${volume} ${issue} ${page}`,
+      filter: "issn:1367-4811,type:journal-article",
+      rows: "10",
+    });
+    const response = await fetcher(`https://api.crossref.org/works?${params}`, {signal, credentials: "omit"});
+    if (!response.ok) return null;
+    const {message} = await response.json();
+    const matches = message?.items?.filter(work => work.type === "journal-article"
+      && normalizeDoi(work.DOI)?.startsWith("10.1093/bioinformatics/")
+      && work.volume === volume && work.issue === issue
+      && work.page?.match(/^[a-z]?\d+/i)?.[0].toLowerCase() === page);
+    return matches?.length === 1 ? crossrefRecord(matches[0]) : null;
   }
 
   const data = await searchEuropePmc(`PMCID:${id}`, "core", signal, fetcher);

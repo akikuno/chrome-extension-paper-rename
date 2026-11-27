@@ -58,15 +58,33 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   return true;
 });
 
+function tokenlessPdfKey(value) {
+  const key = urlKey(value);
+  if (!key) return null;
+  const url = new URL(key);
+  if (!/\.pdf$/i.test(url.pathname) || url.searchParams.getAll("token").length !== 1
+      || !url.searchParams.get("token")) return null;
+  url.searchParams.delete("token");
+  return url.href;
+}
+
 async function determine(item, signal) {
   const urls = [item.url, item.finalUrl];
   const keys = new Set(urls.map(urlKey).filter(Boolean));
   const ids = urls.map(identify).filter(Boolean);
   const {articles = []} = await chrome.storage.session.get("articles");
-  const records = articles.filter(record => keys.has(record.pdfUrl) && Date.now() - record.time < recordLifetime);
+  const active = articles.filter(record => Date.now() - record.time < recordLifetime);
+  const exact = active.filter(record => keys.has(record.pdfUrl));
+  const referrer = urlKey(item.referrer);
+  const signedKeys = new Set(urls.map(tokenlessPdfKey).filter(Boolean));
+  const records = exact.length || !referrer || !signedKeys.size ? exact : active.filter(record =>
+    record.page === referrer && signedKeys.has(tokenlessPdfKey(record.pdfUrl)));
   const dois = new Set([...ids.filter(id => id.type === "doi").map(id => id.id), ...records.map(record => record.doi)].filter(Boolean));
   const pmcids = new Set(ids.filter(id => id.type === "pmcid").map(id => id.id));
-  if (dois.size > 1 || pmcids.size > 1) return null;
+  const bioinformatics = ids.filter(id => id.type === "bioinformatics");
+  const [location] = bioinformatics;
+  if (dois.size > 1 || pmcids.size > 1 || bioinformatics.some(id =>
+    id.volume !== location.volume || id.issue !== location.issue || id.page !== location.page)) return null;
   const names = new Set(records.map(paperFilename).filter(Boolean));
   if (names.size > 1) return null;
 
@@ -78,8 +96,9 @@ async function determine(item, signal) {
     const name = paperFilename(record);
     return name && (!names.size || names.has(name)) ? record : null;
   }
-  if (ids.length || (doi && !names.size)) {
-    const record = await lookup({type: "doi", id: doi}, signal);
+  const identifier = doi && (ids.length || !names.size) ? {type: "doi", id: doi} : location;
+  if (identifier) {
+    const record = await lookup(identifier, signal);
     const name = paperFilename(record);
     return name && (!names.size || names.has(name)) ? record : null;
   }
